@@ -1,0 +1,300 @@
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class Book implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String name;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+
+
+package com.wecp.library.domain;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import reactor.core.publisher.Mono;
+
+import javax.persistence.*;
+import java.io.Serializable;
+import java.time.LocalDate;
+
+@Entity
+public class Issue implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private LocalDate issueDate;
+
+    private LocalDate returnDate;
+
+    private Integer period;
+
+    private Integer fine;
+
+    @ManyToOne
+    @JsonIgnoreProperties(value = "issues", allowSetters = true)
+    private Book book;
+
+    @ManyToOne
+    @JsonIgnoreProperties(value = "issues", allowSetters = true)
+    private User user;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public LocalDate getIssueDate() {
+        return issueDate;
+    }
+
+    public void setIssueDate(LocalDate issueDate) {
+        this.issueDate = issueDate;
+    }
+
+    public LocalDate getReturnDate() {
+        return returnDate;
+    }
+
+    public void setReturnDate(LocalDate returnDate) {
+        this.returnDate = returnDate;
+    }
+
+    public Integer getPeriod() {
+        return period;
+    }
+
+    public void setPeriod(Integer period) {
+        this.period = period;
+    }
+
+    public Integer getFine() {
+        return fine;
+    }
+
+    public void setFine(Integer fine) {
+        this.fine = fine;
+    }
+
+    public Book getBook() {
+        return book;
+    }
+
+    public void setBook(Book book) {
+        this.book = book;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+}
+
+
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String username;
+
+    private boolean subscribed = false;
+
+    public boolean getSubscribed() {
+        return subscribed;
+    }
+
+    public void setSubscribed(boolean subscribed) {
+        this.subscribed = subscribed;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+}
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.Issue;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface IssueRepository extends JpaRepository<Issue, Long> {
+}
+
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserRepository  extends JpaRepository<User, Long>{
+
+}
+
+
+package com.wecp.library.security;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+
+/**
+ * Configure Spring Security class here. Don't forget to extend the class with the necessary Spring Security class.
+ * user and renew-user-subscription APIs must be authenticated and issue-book must be permitAll.
+ */
+@EnableWebSecurity
+public class WebSecurityConfigurer extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception{
+        http
+        .httpBasic()
+        .and()
+        .authorizeRequests()
+        .antMatchers("/api/v1/**").authenticated()
+        .antMatchers("/api/v1/issue-book").permitAll()
+        .and()
+        .csrf().disable();
+    }
+}
+
+
+package com.wecp.library.controller;
+
+import com.wecp.library.controller.exception.UserNotSubscribedException;
+import com.wecp.library.domain.Issue;
+import com.wecp.library.domain.User;
+import com.wecp.library.repository.IssueRepository;
+import com.wecp.library.repository.UserRepository;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+/**
+ * REST controller for managing library system process
+ */
+@RestController
+@RequestMapping("/api/v1")
+public class LibraryController {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    /**
+     * {@code POST  /issue-book} : Create a new issue.
+     *
+     * If user is not subscribed, throw {@link UserNotSubscribedException}.
+     * If user not found, return noContent.
+     */
+    @PostMapping("/issue-book")
+    public ResponseEntity<Issue> issueBook(@RequestBody Issue issue) {
+        Optional<User> optionalUser = userRepository.findById(issue.getUser().getId());
+
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        User user = optionalUser.get();
+
+        if (!user.getSubscribed()) {
+            throw new UserNotSubscribedException(); // Custom Exception
+        }
+
+        Issue savedIssue = issueRepository.save(issue);
+        return ResponseEntity.ok(savedIssue);
+    }
+
+    /**
+     * {@code POST  /user} : Create a new user.
+     */
+    @PostMapping("/user")
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User savedUser = userRepository.save(user);
+        return ResponseEntity.ok(savedUser);
+    }
+
+    /**
+     * {@code GET  /renew-user-subscription/:id} :
+     * Set user subscription to true.
+     */
+    @GetMapping("/renew-user-subscription/{id}")
+    public ResponseEntity<User> renewUserSubscription(@PathVariable Long id) {
+        Optional<User> optionalUser = userRepository.findById(id);
+
+        if (optionalUser.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        User user = optionalUser.get();
+        user.setSubscribed(true);
+
+        User updatedUser = userRepository.save(user);
+        return ResponseEntity.ok(updatedUser);
+    }
+}
