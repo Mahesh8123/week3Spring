@@ -1,0 +1,174 @@
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class Book implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String name;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+
+
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String username;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+}
+
+
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.Book;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface BookRepository extends JpaRepository<Book, Long>{
+}
+
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+}
+
+
+package com.wecp.library.controller;
+
+import com.wecp.library.domain.Book;
+import com.wecp.library.domain.User;
+import com.wecp.library.repository.BookRepository;
+import com.wecp.library.repository.UserRepository;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+/**
+ * REST controller for managing library system process
+ */
+@RestController
+@RequestMapping("/api/v1")
+public class LibraryController {
+
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    /**
+     * {@code GET  /user/:id} : get the "id" User.
+     *
+     * @param id the id of the user to retrieve.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
+     * the user, or if does not exist, return with status "noContent".
+     */
+    @GetMapping("/user/{id}")
+    public ResponseEntity<Optional<User>> getUser(@PathVariable Long id) {
+        Optional<User> u = userRepository.findById(id);
+        if(u.isPresent()){
+            return ResponseEntity.ok().body(u);
+        }
+        return ResponseEntity.noContent().build();
+        
+    }
+
+    /**
+     * {@code POST  /user} : Create a new user.
+     *
+     * @param user the user to create.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the new user
+     */
+    @PostMapping("/user")
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        User u = userRepository.save(user);
+        return ResponseEntity.ok().body(u);
+    }
+
+    /**
+     * {@code GET  /book/:id} : get the "id" Book.
+     *
+     * @param id the id of the book to retrieve.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body
+     * the book, or if does not exist, return with status "noContent".
+     */
+    @GetMapping("/book/{id}")
+    public ResponseEntity<Optional<Book>> getBook(@PathVariable Long id) {
+        Optional<Book> b = bookRepository.findById(id);
+        if(b.isPresent()){
+            return ResponseEntity.ok().body(b);
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * {@code POST  /book} : Create a new book.
+     *
+     * @param book the book to create.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the new book
+     */
+    @PostMapping("/book")
+    public ResponseEntity<Book> createBook(@RequestBody Book book) {
+        Book b = bookRepository.save(book);
+        return ResponseEntity.ok().body(b);
+    }
+}
