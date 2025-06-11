@@ -1,0 +1,282 @@
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class Book implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String name;
+
+    private Integer quantity;
+
+    public Long getId() {
+        return id;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+
+package com.wecp.library.domain;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import reactor.core.publisher.Mono;
+
+import javax.persistence.*;
+import java.io.Serializable;
+import java.time.LocalDate;
+
+@Entity
+public class Issue implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private LocalDate issueDate;
+
+    private LocalDate returnDate;
+
+    private Integer period;
+
+    private Integer fine;
+
+    @ManyToOne
+    @JsonIgnoreProperties(value = "issues", allowSetters = true)
+    private Book book;
+
+    private Long userId;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public LocalDate getIssueDate() {
+        return issueDate;
+    }
+
+    public void setIssueDate(LocalDate issueDate) {
+        this.issueDate = issueDate;
+    }
+
+    public LocalDate getReturnDate() {
+        return returnDate;
+    }
+
+    public void setReturnDate(LocalDate returnDate) {
+        this.returnDate = returnDate;
+    }
+
+    public Integer getPeriod() {
+        return period;
+    }
+
+    public void setPeriod(Integer period) {
+        this.period = period;
+    }
+
+    public Integer getFine() {
+        return fine;
+    }
+
+    public void setFine(Integer fine) {
+        this.fine = fine;
+    }
+
+    public Book getBook() {
+        return book;
+    }
+
+    public void setBook(Book book) {
+        this.book = book;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+}
+package com.wecp.library.domain;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import java.io.Serializable;
+
+@Entity
+public class User implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+
+    private String username;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+}
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.Book;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+/**
+ * Spring Data repository for the Book entity. Use correct annotation and extend the class with necessary Spring Data class
+ */
+@Repository
+public interface BookRepository extends JpaRepository<Book, Long> {
+}
+package com.wecp.library.repository;
+
+import com.wecp.library.domain.Issue;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+/**
+ * Spring Data repository for the Issue entity. Use correct annotation and extend the class with necessary Spring Data class
+ */
+@Repository
+public interface IssueRepository extends JpaRepository<Issue, Long>{
+}
+
+
+package com.wecp.library.controller;
+
+import com.wecp.library.controller.exception.BookNotAvailableException;
+import com.wecp.library.domain.Book;
+import com.wecp.library.domain.Issue;
+import com.wecp.library.repository.BookRepository;
+import com.wecp.library.repository.IssueRepository;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
+
+/**
+ * REST controller for managing library system process
+ */
+@RestController
+@RequestMapping("/api/v1")
+public class LibraryController {
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    /**
+     * {@code POST  /issueBook} : Users issue a book of their choice,
+     * if book quantity is zero, throw "BookNotAvailableException".
+     */
+    @PostMapping("/issueBook")
+    public ResponseEntity<Issue> issueBook(@RequestBody Issue issue) {
+        Long bookId = issue.getBook().getId();
+
+        Optional<Book> optionalBook = bookRepository.findById(bookId);
+
+        if (optionalBook.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Book book = optionalBook.get();
+        if (book.getQuantity() == null || book.getQuantity() <= 0) {
+            throw new BookNotAvailableException();
+        }
+
+        // Decrease quantity and save updated book
+        book.setQuantity(book.getQuantity() - 1);
+        bookRepository.save(book);
+
+        // Save the issue record
+        Issue savedIssue = issueRepository.save(issue);
+        return ResponseEntity.ok(savedIssue);
+    }
+
+    /**
+     * {@code POST  /depositBook} : Inquiry the issue if there is a fine
+     *
+     * @param issue the issue to inquiry.
+     * @return the Mono with fine or just return 0
+     */
+    @PostMapping("/depositBook")
+    public Mono<Integer> depositBook(@RequestBody Issue issueRequest) {
+        Optional<Issue> optionalIssue = issueRepository.findById(issueRequest.getId());
+
+        if (optionalIssue.isPresent()) {
+            Issue savedIssue = optionalIssue.get();
+
+            LocalDate returnDate = issueRequest.getReturnDate();
+            LocalDate issueDate = savedIssue.getIssueDate();
+            int period = savedIssue.getPeriod();
+
+            LocalDate expectedReturnDate = issueDate.plusDays(period);
+            long lateDays = ChronoUnit.DAYS.between(expectedReturnDate, returnDate);
+
+            int finePerDay = 6;
+            int fine = (int) Math.max(0, lateDays * finePerDay);
+
+            return Mono.just(fine);
+        }
+
+        return Mono.just(0);
+    }
+}
